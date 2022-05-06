@@ -92,7 +92,7 @@ def write_multiscale_image_summary(image_resolution, train_dataset, model, model
         spectrums = [spectrum / smax * 50 for spectrum in spectrums]
 
         spectrums = [(torch.clamp(abs(torch.norm(spectrum, dim=1, keepdim=True)), 0, 1))**(1/2) for spectrum in spectrums]
-        spectrums = [spectrum.repeat(1, 3, 1, 1) for spectrum in spectrums]
+        spectrums = [spectrum.repeat(1, gt_imgs[0].shape[1], 1, 1) for spectrum in spectrums]
         output_vs_gt = torch.cat((output_vs_gt, *spectrums), dim=0)
 
         if write_images:
@@ -125,6 +125,12 @@ def write_multiscale_image_summary(image_resolution, train_dataset, model, model
                              normalize=False, nrow=output_vs_gt.shape[0]), global_step=total_steps)
             write_psnr(pred_img[-1], gt_img, writer, total_steps, prefix+'img_')
 
+    # Eric: similar to write_image_summary, if val set not provided,
+    # don't use it
+    # validation samples
+    if val_dataset is None:
+        return
+    
     image_resolution = [2*r for r in image_resolution]
     model_input, gt = val_dataset[0]
     tmp = {}
@@ -160,7 +166,8 @@ def write_image_summary(image_resolution, train_dataset, model, model_input, gt,
                         val_dataset=None):
 
     gt_img = dataio.lin2img(gt['img'], image_resolution)
-    pred_img = dataio.lin2img(model_output['model_out']['output'], image_resolution)
+    # Eric: as in write_image_multiscale_summary(), we clamp the prediction to [0, 1]
+    pred_img = dataio.lin2img(model_output['model_out']['output'], image_resolution).clamp(0, 1)
 
     output_vs_gt = torch.cat((gt_img, pred_img), dim=-1)
     writer.add_image(prefix + 'gt_vs_pred', make_grid(output_vs_gt, scale_each=False, normalize=True),
