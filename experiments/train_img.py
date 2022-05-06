@@ -33,14 +33,22 @@ p.add_argument('--model', default='mfn', choices=['mfn', 'mlp'],
 p.add_argument('--batch_size', type=int, default=1)
 p.add_argument('--hidden_features', type=int, default=32)
 p.add_argument('--hidden_layers', type=int, default=4)
-p.add_argument('--res', type=int, default=256,
-               help='resolution of image to fit, also used to set the network-equivalent sample rate'
-               + ' i.e., the maximum network bandwidth in cycles per unit interval is half this value')
+# p.add_argument('--res', type=int, default=256,
+#                help='resolution of image to fit, also used to set the network-equivalent sample rate'
+#                + ' i.e., the maximum network bandwidth in cycles per unit interval is half this value')
+p.add_argument('--res_height', type=int, default=256,
+               help='resolution of image to fit (height)')
+p.add_argument('--res_width', type=int, default=256,
+               help='resolution of image to fit (width)')
 p.add_argument('--lr', type=float, default=5e-4, help='learning rate')
-p.add_argument('--num_steps', type=int, default=5001,
-               help='number of training steps')
+p.add_argument('--num_epochs', type=int, default=5001,
+               help='number of training epochs')
 p.add_argument('--gpu', type=int, default=0,
                help='gpu id to use for training')
+p.add_argument('--point_batch_size', type=int, default=1048576,
+               help='number of points to sample on each iter during training')
+p.add_argument('--eval_patch_size', type=int, default=1048576,
+               help='number of points to process per patch during eval')
 
 # mfn options
 p.add_argument('--multiscale', action='store_true', default=False,
@@ -66,6 +74,8 @@ p.add_argument('--img_fn', type=str, default='../data/lighthouse.png',
                help='path to specific png filename')
 p.add_argument('--grayscale', action='store_true', default=False,
                help='if grayscale image')
+p.add_argument('--crop_square', action='store_true', default=False,
+               help='crop to square or not')
 
 # summary, logging options
 p.add_argument('--steps_til_ckpt', type=int, default=100,
@@ -110,7 +120,9 @@ def train():
 
     # start training
     training.train(model=model, train_dataloader=dataloader,
-                   steps=opt.num_steps, lr=opt.lr,
+                   epochs=opt.num_epochs, lr=opt.lr,
+                   point_batch_size=opt.point_batch_size,
+                   eval_patch_size=opt.eval_patch_size,
                    steps_til_summary=opt.steps_til_summary,
                    steps_til_checkpoint=opt.steps_til_ckpt,
                    model_dir=opt.root_path, loss_fn=loss_fn, summary_fn=summary_fn)
@@ -125,16 +137,14 @@ def init_dataloader(opt):
         url = None
 
     # init datasets
-    trn_dataset = dataio.ImageFile(opt.img_fn, grayscale=opt.grayscale, resolution=(opt.res, opt.res), url=url)
-
-    val_dataset = dataio.ImageFile(opt.img_fn, grayscale=opt.grayscale, resolution=(2*opt.res, 2*opt.res), url=url)
+    trn_dataset = dataio.ImageFile(
+        opt.img_fn,
+        grayscale=opt.grayscale,
+        resolution=(opt.res_height, opt.res_width),
+        crop_square=opt.crop_square,
+        url=url)
 
     trn_dataset = dataio.ImageWrapper(trn_dataset, centered=opt.centered,
-                                      include_end=False,
-                                      multiscale=opt.use_resized,
-                                      stages=3)
-
-    val_dataset = dataio.ImageWrapper(val_dataset, centered=opt.centered,
                                       include_end=False,
                                       multiscale=opt.use_resized,
                                       stages=3)
@@ -142,7 +152,7 @@ def init_dataloader(opt):
     dataloader = DataLoader(trn_dataset, shuffle=True, batch_size=opt.batch_size,
                             pin_memory=True, num_workers=0)
 
-    return trn_dataset, val_dataset, dataloader
+    return trn_dataset, None, dataloader
 
 
 def init_model(opt):
@@ -150,7 +160,8 @@ def init_model(opt):
     if opt.grayscale:
         out_features = 1
     else:
-        out_features = 1
+        # Eric: if RGB image, should output 3 channels
+        out_features = 3
 
     if opt.model == 'mlp':
 
@@ -182,7 +193,7 @@ def init_model(opt):
         model = m(2, opt.hidden_features, out_size=out_features,
                   hidden_layers=opt.hidden_layers,
                   bias=True,
-                  frequency=(opt.res, opt.res),
+                  frequency=(opt.res_height, opt.res_width),
                   quantization_interval=2*np.pi,
                   input_scales=input_scales,
                   output_layers=output_layers,
@@ -205,12 +216,12 @@ def init_loss(opt, trn_dataset, val_dataset):
     # initialize the loss
     if opt.multiscale:
         loss_fn = partial(loss_functions.multiscale_image_mse, use_resized=opt.use_resized)
-        summary_fn = partial(utils.write_multiscale_image_summary, (opt.res, opt.res),
-                             trn_dataset, use_resized=opt.use_resized, val_dataset=val_dataset)
+        summary_fn = partial(utils.write_multiscale_image_summary, (opt.res_height, opt.res_width),
+                             trn_dataset, use_resized=opt.use_resized, val_dataset=None, write_images=True)
     else:
         loss_fn = loss_functions.image_mse
-        summary_fn = partial(utils.write_image_summary, (opt.res, opt.res), trn_dataset,
-                             val_dataset=val_dataset)
+        summary_fn = partial(utils.write_image_summary, (opt.res_height, opt.res_width), trn_dataset,
+                             val_dataset=None, write_images=True)
 
     return loss_fn, summary_fn
 
