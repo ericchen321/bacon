@@ -98,16 +98,17 @@ def write_multiscale_image_summary(image_resolution, train_dataset, model, model
         if write_images:
             logdir = os.path.join(writer.log_dir, 'imgs')
             cond_mkdir(logdir)
-            for idx, im in enumerate(all_imgs):
+            for idx, im in enumerate(pred_img):
+                # Eric: we only save predicted images
                 im = im.squeeze(0)
                 im = im.permute(1, 2, 0)
                 im = (im * 255).detach().cpu().numpy().astype(np.uint8)
-                skimage.io.imsave(os.path.join(logdir, f'im_{idx}_{total_steps:04d}.png'), im)
+                skimage.io.imsave(os.path.join(logdir, f'im_{total_steps:04d}_{idx}.png'), im)
             for idx, im in enumerate(spectrums):
                 im = im.squeeze(0)
                 im = im.permute(1, 2, 0)
                 im = (im * 255).detach().cpu().numpy().astype(np.uint8)
-                skimage.io.imsave(os.path.join(logdir, f'spectrum_{idx}_{total_steps:04d}.png'), im)
+                skimage.io.imsave(os.path.join(logdir, f'spectrum_{total_steps:04d}_{idx}.png'), im)
 
         writer.add_image(prefix + 'gt_vs_pred', make_grid(output_vs_gt, scale_each=False,
                          normalize=False, nrow=output_vs_gt.shape[0]//2), global_step=total_steps)
@@ -163,7 +164,7 @@ def write_multiscale_image_summary(image_resolution, train_dataset, model, model
 
 def write_image_summary(image_resolution, train_dataset, model, model_input, gt,
                         model_output, writer, total_steps, prefix='train_',
-                        val_dataset=None):
+                        val_dataset=None, write_images=False):
 
     gt_img = dataio.lin2img(gt['img'], image_resolution)
     # Eric: as in write_image_multiscale_summary(), we clamp the prediction to [0, 1]
@@ -175,6 +176,15 @@ def write_image_summary(image_resolution, train_dataset, model, model_input, gt,
 
     write_psnr(pred_img, gt_img, writer, total_steps, prefix+'img_')
 
+    if write_images:
+        # Eric: also enable image saving as in write_multiscale_image_summary()
+        logdir = os.path.join(writer.log_dir, 'imgs')
+        cond_mkdir(logdir)
+        im = pred_img.squeeze(0)
+        im = im.permute(1, 2, 0)
+        im = (im * 255).detach().cpu().numpy().astype(np.uint8)
+        skimage.io.imsave(os.path.join(logdir, f'im_{total_steps:04d}.png'), im)
+    
     # validation samples
     if val_dataset is None:
         return
