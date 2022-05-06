@@ -139,8 +139,12 @@ class FourierLayer(nn.Module):
         super().__init__()
         self.linear = nn.Linear(in_features, out_features)
 
-        r = 2*weight_scale[0] / quantization_interval
-        assert math.isclose(r, round(r)), \
+        # Eric: why is only weight_scale[0] used? My guess is the authors
+        # assume images to be always square-shaped.
+        # I'm enforcing whatever constraint this is on both height and width
+        r0 = 2*weight_scale[0] / quantization_interval
+        r1 = 2*weight_scale[1] / quantization_interval
+        assert math.isclose(r0, round(r0)) and math.isclose(r1, round(r1)), \
                'weight_scale should be divisible by quantization interval'
 
         # sample discrete uniform distribution of frequencies

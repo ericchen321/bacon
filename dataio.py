@@ -208,14 +208,18 @@ class ImageFile(Dataset):
             self.img = self.img.convert('RGB')
 
         self.img_channels = len(self.img.mode)
-        self.resolution = self.img.size
+        # Eric: we set resolution to [h, w]
+        self.resolution = (self.img.size[1], self.img.size[0])
 
         if crop_square:  # preserve aspect ratio
             self.img = crop_max_square(self.img)
 
-        if resolution is not None:
+        if resolution is not None and \
+            (resolution[0]<self.resolution[0] or resolution[1]<self.resolution[1]):
+            # Eric: resize only if given resolution is less than image resolution
             self.resolution = resolution
-            self.img = self.img.resize(resolution, Image.ANTIALIAS)
+            self.img = self.img.resize(
+                (self.resolution[1], self.resolution[0]), Image.ANTIALIAS)
 
         self.img = np.array(self.img)
         self.img = self.img.astype(np.float32)/255.

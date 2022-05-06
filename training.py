@@ -8,10 +8,12 @@ import os
 import forward_models
 from functools import partial
 import shutil
+from math import ceil
 
 
-def train(model, train_dataloader, steps, lr, steps_til_summary,
-          steps_til_checkpoint, model_dir, loss_fn, summary_fn,
+def train(model, train_dataloader, epochs, lr,
+          point_batch_size, eval_patch_size,
+          steps_til_summary, steps_til_checkpoint, model_dir, loss_fn, summary_fn,
           prefix_model_dir='', val_dataloader=None, double_precision=False,
           clip_grad=False, use_lbfgs=False, loss_schedules=None, params=None,
           ckpt_step=0, use_lr_scheduler=False):
@@ -28,17 +30,19 @@ def train(model, train_dataloader, steps, lr, steps_til_summary,
 
     scheduler = None
     if use_lr_scheduler:
+        # Eric: despite lr depends on total num of steps, by default
+        # we use fixed lr, so nothing in this if clause would be used
         def sampling_scheduler(step, start=0, lr0=1e-4, lrn=1e-4):
 
             if step > start:
-                fine_scale = lr_log_schedule(step-start, num_steps=steps-start, nw=1, lr0=lr0, lrn=lrn)
+                fine_scale = lr_log_schedule(step-start, num_steps=epochs-start, nw=1, lr0=lr0, lrn=lrn)
                 train_dataloader.dataset.fine_scale = fine_scale
             else:
                 train_dataloader.dataset.fine_scale = lr0
 
         # lr scheduler
         optim.param_groups[0]['lr'] = 1
-        log_scheduler = partial(lr_log_schedule, num_steps=steps, nw=1, lr0=lr, lrn=1e-4)
+        log_scheduler = partial(lr_log_schedule, num_steps=epochs, nw=1, lr0=lr, lrn=1e-4)
         scheduler = torch.optim.lr_scheduler.LambdaLR(optim, lr_lambda=log_scheduler)
 
     if os.path.exists(model_dir):
@@ -59,105 +63,188 @@ def train(model, train_dataloader, steps, lr, steps_til_summary,
     # e.g. epochs=1k, len(train_dataloader)=25
     train_generator = iter(train_dataloader)
 
-    with tqdm(total=steps) as pbar:
+    # Eric: since we have only one image to train, we load the image
+    # before training commences
+    assert len(train_dataloader) == 1
+    try:
+        # sampling_scheduler(step)
+        model_input, gt = next(train_generator)
+    except StopIteration:
+        train_generator = iter(train_dataloader)
+        model_input, gt = next(train_generator)
+    model_input = dict2cuda(model_input)
+    gt = dict2cuda(gt)
+    img_dim = model_input['coords'].shape[1]
+    num_batches = ceil(img_dim / point_batch_size)
+
+    with tqdm(total=epochs * num_batches) as pbar:
         train_losses = []
-        for step in range(steps):
+        step = 0
+        for epoch in range(epochs):
+            # Eric: divide meshgrid/image into point patches
+            coords_indices = torch.randperm(model_input['coords'].shape[1])
+            coord_arrays = torch.split(coords_indices, point_batch_size, dim=0)
 
-            if not step % steps_til_checkpoint and step:
-                torch.save(model.state_dict(),
-                           os.path.join(checkpoints_dir,
-                           'model_step_%04d.pth' % (step + ckpt_step)))
-                np.savetxt(os.path.join(checkpoints_dir,
-                           'train_losses_step_%04d.txt' % (step + ckpt_step)),
-                           np.array(train_losses))
+            for coord_array_index in range(len(coord_arrays)):
+                start_time = time.time()
+                
+                if not step % steps_til_checkpoint and step:
+                    torch.save(model.state_dict(),
+                            os.path.join(checkpoints_dir,
+                            'model_step_%04d.pth' % (step + ckpt_step)))
+                    np.savetxt(os.path.join(checkpoints_dir,
+                            'train_losses_step_%04d.txt' % (step + ckpt_step)),
+                            np.array(train_losses))
+                
+                # Eric: train over each point batch
+                coord_array = coord_arrays[coord_array_index].detach().numpy()
+                # Eric: we're not including radii because CoordinateNet (which
+                # is not multiscale) doesn't use it
+                model_input_train = {
+                    'coords': model_input['coords'][:, coord_array, :]}
+                gt_train = {
+                    'img': gt['img'][:, coord_array, :]}
 
-            try:
-                # sampling_scheduler(step)
-                model_input, gt = next(train_generator)
-            except StopIteration:
-                train_generator = iter(train_dataloader)
-                model_input, gt = next(train_generator)
+                if double_precision:
+                    model_input_train = {key: value.double()
+                                for key, value in model_input_train.items()}
+                    gt_train = {key: value.double() for key, value in gt_train.items()}
 
-            start_time = time.time()
+                if use_lbfgs:
+                    def closure():
+                        optim.zero_grad(set_to_none=True)
+                        model_output_train = model(model_input_train)
+                        losses = loss_fn(model_output_train, gt_train)
+                        train_loss = 0.
+                        for loss_name, loss in losses.items():
+                            train_loss += loss.mean()
+                        train_loss.backward()
+                        return train_loss
+                    optim.step(closure)
 
-            model_input = dict2cuda(model_input)
-            gt = dict2cuda(gt)
+                model_output_train = model(model_input_train)
+                losses = loss_fn(model_output_train, gt_train)
 
-            if double_precision:
-                model_input = {key: value.double()
-                               for key, value in model_input.items()}
-                gt = {key: value.double() for key, value in gt.items()}
+                train_loss = 0.
+                for loss_name, loss in losses.items():
+                    single_loss = loss.mean()
 
-            if use_lbfgs:
-                def closure():
-                    optim.zero_grad(set_to_none=True)
-                    model_output = model(model_input)
-                    losses = loss_fn(model_output, gt)
-                    train_loss = 0.
-                    for loss_name, loss in losses.items():
-                        train_loss += loss.mean()
-                    train_loss.backward()
-                    return train_loss
-                optim.step(closure)
+                    if loss_schedules is not None and \
+                            loss_name in loss_schedules:
+                        writer.add_scalar(loss_name + "_weight",
+                                        loss_schedules[loss_name](step), step)
+                        single_loss *= loss_schedules[loss_name](step)
 
-            model_output = model(model_input)
-            losses = loss_fn(model_output, gt)
+                    writer.add_scalar(loss_name, single_loss, step)
+                    train_loss += single_loss
 
-            train_loss = 0.
-            for loss_name, loss in losses.items():
-                single_loss = loss.mean()
+                train_losses.append(train_loss.item())
+                writer.add_scalar("total_train_loss", train_loss, step)
+                writer.add_scalar("lr", optim.param_groups[0]['lr'], step)
 
-                if loss_schedules is not None and \
-                        loss_name in loss_schedules:
-                    writer.add_scalar(loss_name + "_weight",
-                                      loss_schedules[loss_name](step), step)
-                    single_loss *= loss_schedules[loss_name](step)
-
-                writer.add_scalar(loss_name, single_loss, step)
-                train_loss += single_loss
-
-            train_losses.append(train_loss.item())
-            writer.add_scalar("total_train_loss", train_loss, step)
-            writer.add_scalar("lr", optim.param_groups[0]['lr'], step)
-
-            if not step % steps_til_summary:
-                torch.save(model.state_dict(),
-                           os.path.join(checkpoints_dir,
-                                        'model_current.pth'))
-                summary_fn(model, model_input, gt, model_output, writer, step)
-
-            if not use_lbfgs:
-                optim.zero_grad(set_to_none=True)
-                train_loss.backward()
-
-                if clip_grad:
-                    if isinstance(clip_grad, bool):
-                        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.)
+                if not step % steps_til_summary:
+                    # for evaluation, we use all points as input to the model and we also feed
+                    # these points in patches
+                    model_input_eval_arr = torch.split(model_input['coords'], eval_patch_size, dim=1)
+                    model_out_arrs = []
+                    num_patches = len(model_input_eval_arr)
+                    for patch_index in range(num_patches):
+                        model_input_eval_patch = {
+                            'coords': model_input_eval_arr[patch_index]
+                        }
+                        model.eval()
+                        model_output_eval_patch = None
+                        with torch.no_grad():
+                            model_output_eval_patch = model(model_input_eval_patch)
+                        model.train()
+                        model_out_arrs.append(model_output_eval_patch['model_out']['output'])
+                        del model_input_eval_patch['coords']
+                        if isinstance(model_output_eval_patch['model_out']['output'], list):
+                            for model_out_per_scale in model_output_eval_patch['model_out']['output']:
+                                del model_out_per_scale
+                        else:
+                            del model_output_eval_patch['model_out']['output']
+                    model_output_eval = None
+                    if isinstance(model_out_arrs[0], list):
+                        model_output_eval = {
+                            'model_in': model_input['coords'],
+                            'model_out': {
+                                'output': []
+                            }
+                        }
+                        num_scales = len(model_out_arrs[0])
+                        for scale_index in range(num_scales):
+                            model_output_eval['model_out']['output'].append(
+                                torch.cat(
+                                    [model_out_arrs[patch_index][scale_index] \
+                                        for patch_index in range(num_patches)],
+                                    dim=1).cuda()
+                            )
                     else:
-                        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=clip_grad)
+                        model_output_eval = {
+                            'model_in': model_input['coords'],
+                            'model_out': {'output': torch.cat(model_out_arrs, dim=1).cuda()}
+                        }
+                    torch.save(model.state_dict(),
+                            os.path.join(checkpoints_dir,
+                                            'model_current.pth'))
+                    summary_fn(
+                        model,
+                        dict2cpu(model_input),
+                        dict2cpu(gt),
+                        dict2cpu(model_output_eval),
+                        writer,
+                        step)
+                    
+                    # Eric: delete tensors
+                    for arr in model_input_eval_arr:
+                        del arr
+                    if isinstance(model_out_arrs[0], list):
+                        for list_of_arrs in model_out_arrs:
+                            for arr in list_of_arrs:
+                                del arr
+                    else:
+                        for arr in model_out_arrs:
+                            del arr
+                    del model_output_eval['model_in']
+                    del model_output_eval['model_out']['output']
+                    torch.cuda.empty_cache()
 
-                optim.step()
+                if not use_lbfgs:
+                    optim.zero_grad(set_to_none=True)
+                    train_loss.backward()
 
-                if scheduler is not None:
-                    scheduler.step()
+                    if clip_grad:
+                        if isinstance(clip_grad, bool):
+                            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.)
+                        else:
+                            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=clip_grad)
 
-            pbar.update(1)
+                    optim.step()
 
-            if not step % steps_til_summary:
-                tqdm.write("Step %d, Total loss %0.6f, iteration time %0.6f" % (step, train_loss, time.time() - start_time))
+                    if scheduler is not None:
+                        scheduler.step()
 
-                if val_dataloader is not None:
-                    print("Running validation set...")
-                    model.eval()
-                    with torch.no_grad():
-                        val_losses = []
-                        for (model_input, gt) in val_dataloader:
-                            model_output = model(model_input)
-                            val_loss = loss_fn(model_output, gt)
-                            val_losses.append(val_loss)
+                pbar.update(1)
 
-                        writer.add_scalar("val_loss", np.mean(val_losses), step)
-                    model.train()
+                if not step % steps_til_summary:
+                    tqdm.write("Step %d, Total loss %0.6f, iteration time %0.6f" % (step, train_loss, time.time() - start_time))
+
+                    if val_dataloader is not None:
+                        # Eric: we are not using the validation set
+                        print("Running validation set...")
+                        model.eval()
+                        with torch.no_grad():
+                            val_losses = []
+                            for (model_input, gt) in val_dataloader:
+                                model_output = model(model_input)
+                                val_loss = loss_fn(model_output, gt)
+                                val_losses.append(val_loss)
+
+                            writer.add_scalar("val_loss", np.mean(val_losses), step)
+                        model.train()
+
+                step += 1
 
         torch.save(model.state_dict(),
                    os.path.join(checkpoints_dir, 'model_final.pth'))
@@ -388,7 +475,7 @@ def train_wchunks(models, train_dataloader, num_steps, lr, steps_til_summary, st
                                os.path.join(checkpoints_dir, 'model_'+key+'_current.pth'))
                 for key, optim in optims.items():
                     torch.save({'step': step,
-                                'total_steps': step,
+                                'step': step,
                                 'optimizer_state_dict': optim.state_dict(),
                                 'scheduler_state_dict': schedulers[key].state_dict()},
                                os.path.join(checkpoints_dir, 'optim_'+key+'_current.pth'))
