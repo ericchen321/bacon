@@ -246,6 +246,11 @@ def train(model, train_dataloader, epochs, lr,
 
                 step += 1
 
+            del coords_indices
+            for coord_arr in coord_arrays:
+                del coord_arr
+            torch.cuda.empty_cache()
+
         torch.save(model.state_dict(),
                    os.path.join(checkpoints_dir, 'model_final.pth'))
         np.savetxt(os.path.join(checkpoints_dir, 'train_losses_final.txt'),
