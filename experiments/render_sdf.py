@@ -11,6 +11,7 @@ import mcubes
 import trimesh
 import dataio
 import math
+import configargparse
 
 
 def export_model(ckpt_path, model_name, N=512, model_type='bacon', hidden_layers=8,
@@ -173,17 +174,8 @@ def generate_mesh_adaptive(model, model_name):
         mesh.export(f"./outputs/meshes/{model_name}.obj")
 
 
-def export_meshes(adaptive=True):
-    bacon_ckpts = ['../trained_models/dragon.pth',
-                   '../trained_models/armadillo.pth',
-                   '../trained_models/lucy.pth',
-                   '../trained_models/thai.pth']
-
-    bacon_names = ['bacon_dragon',
-                   'bacon_armadillo',
-                   'bacon_lucy',
-                   'bacon_thai']
-
+def export_meshes(bacon_names, bacon_ckpts, adaptive=True):
+    # Eric: supply exp names and ckpt paths from arguments
     print('Exporting BACON')
     for ckpt, name in tqdm(zip(bacon_ckpts, bacon_names), total=len(bacon_ckpts)):
         export_model(ckpt, name, model_type='bacon', output_layers=output_layers, adaptive=adaptive)
@@ -201,7 +193,24 @@ def init_multiscale_mc():
 
 if __name__ == '__main__':
     global N, output_layers, subdiv_hashes, lowest_res, coords_list, sdf_out_list, num_outputs
-    N = 512
+
+    # Eric: use config file rather than hard-coded values
+    p = configargparse.ArgumentParser()
+
+    # config file options
+    p.add('-c', '--config', required=False, is_config_file=True,
+        help='Path to config file.')
+    p.add('--exp_names', action="append", required=True, help='names of experiments')
+    p.add('--ckpts', action="append", required=True,
+        help='paths to model ckpts, should correspond to experiment names')
+
+    # config rendering options
+    p.add_argument('--res', type=int, default=512, help='rendering resolution')
+    p.add_argument('--adaptive', action='store_true', default=False, help='use adaptive rendering')
+
+    opt = p.parse_args()
+
+    N = opt.res
     output_layers = [2, 4, 6, 8]
     num_outputs = len(output_layers)
 
@@ -210,4 +219,4 @@ if __name__ == '__main__':
     # export meshes, use adaptive SDF evaluation or not
     # setting adaptive=False will output meshes at all resolutions
     # while adaptive=True while extract only a high-resolution mesh
-    export_meshes(adaptive=True)
+    export_meshes(opt.exp_names, opt.ckpts, adaptive=opt.adaptive)
