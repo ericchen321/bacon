@@ -119,13 +119,13 @@ def train():
     save_params(opt, model)
 
     # start training
-    training.train(model=model, train_dataloader=dataloader,
-                   epochs=opt.num_epochs, lr=opt.lr,
-                   point_batch_size=opt.point_batch_size,
-                   eval_patch_size=opt.eval_patch_size,
-                   steps_til_summary=opt.steps_til_summary,
-                   steps_til_checkpoint=opt.steps_til_ckpt,
-                   model_dir=opt.root_path, loss_fn=loss_fn, summary_fn=summary_fn)
+    training.train_img(model=model, train_dataloader=dataloader,
+                       epochs=opt.num_epochs, lr=opt.lr,
+                       point_batch_size=opt.point_batch_size,
+                       eval_patch_size=opt.eval_patch_size,
+                       steps_til_summary=opt.steps_til_summary,
+                       steps_til_checkpoint=opt.steps_til_ckpt,
+                       model_dir=opt.root_path, loss_fn=loss_fn, summary_fn=summary_fn)
 
 
 def init_dataloader(opt):

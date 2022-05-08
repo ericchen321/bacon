@@ -114,13 +114,13 @@ def train():
 
     save_params(opt, model)
 
-    training.train(model=model, train_dataloader=dataloader, steps=opt.num_steps,
-                   lr=opt.lr, steps_til_summary=opt.steps_til_summary,
-                   ckpt_step=opt.ckpt_step,
-                   steps_til_checkpoint=opt.steps_til_ckpt,
-                   model_dir=opt.root_path, loss_fn=loss_fn, summary_fn=summary_fn,
-                   double_precision=False, clip_grad=True,
-                   use_lr_scheduler=True)
+    training.train_sdf(model=model, train_dataloader=dataloader, steps=opt.num_steps,
+                       lr=opt.lr, steps_til_summary=opt.steps_til_summary,
+                       ckpt_step=opt.ckpt_step,
+                       steps_til_checkpoint=opt.steps_til_ckpt,
+                       model_dir=opt.root_path, loss_fn=loss_fn, summary_fn=summary_fn,
+                       double_precision=False, clip_grad=True,
+                       use_lr_scheduler=True)
 
 
 def init_dataloader(opt):
