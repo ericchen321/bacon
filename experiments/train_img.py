@@ -41,8 +41,8 @@ p.add_argument('--res_height', type=int, default=256,
 p.add_argument('--res_width', type=int, default=256,
                help='resolution of image to fit (width)')
 p.add_argument('--lr', type=float, default=5e-4, help='learning rate')
-p.add_argument('--num_epochs', type=int, default=5001,
-               help='number of training epochs')
+p.add_argument('--num_steps', type=int, default=100000,
+               help='number of training steps')
 p.add_argument('--gpu', type=int, default=0,
                help='gpu id to use for training')
 p.add_argument('--point_batch_size', type=int, default=1048576,
@@ -120,7 +120,7 @@ def train():
 
     # start training
     training.train_img(model=model, train_dataloader=dataloader,
-                       epochs=opt.num_epochs, lr=opt.lr,
+                       num_steps=opt.num_steps, lr=opt.lr,
                        point_batch_size=opt.point_batch_size,
                        eval_patch_size=opt.eval_patch_size,
                        steps_til_summary=opt.steps_til_summary,
