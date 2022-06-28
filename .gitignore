@@ -3,3 +3,4 @@ data/
 logs/
 logs
 experiments/outputs/
+slurm-*.out
