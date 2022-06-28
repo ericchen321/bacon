@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --time=120:00:00
+#SBATCH --time=10:00:00
 #SBATCH --account=def-rhodin
-#SBATCH --job-name=trainTokyoBacon
+#SBATCH --job-name=tr_tokyo_mono_bacon
 #SBATCH --gres=gpu:v100l:1
 #SBATCH --mem=24G
 module load python/3.8
