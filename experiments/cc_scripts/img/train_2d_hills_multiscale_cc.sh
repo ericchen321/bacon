@@ -10,5 +10,5 @@ module load cuda/11.1.1
 
 cd /home/gxc321/
 source BaconEnv/bin/activate
-cd /home/gxc321/scratch/bacon/experiments/
-source train_img.sh hills bacon_default_multi rgb
+cd /home/gxc321/scratch/bacon/
+source experiments/train_img.sh hills bacon_default_multi rgb

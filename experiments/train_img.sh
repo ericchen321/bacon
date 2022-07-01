@@ -5,8 +5,8 @@ BASE_CONFIG_NAME="$2"
 COLOR="$3"
 
 # define paths
-IMG_PATH="../data/2d/${IMG_NAME}.jpg"
-BASE_CONFIG_PATH="./config/img/${BASE_CONFIG_NAME}.ini"
+IMG_PATH="data/2d/${IMG_NAME}.jpg"
+BASE_CONFIG_PATH="experiments/config/img/${BASE_CONFIG_NAME}.ini"
 
 # get image size
 # https://unix.stackexchange.com/questions/75635/shell-command-to-get-pixel-size-of-an-image
@@ -33,4 +33,4 @@ fi
 
 # execute
 set -x
-python train_img.py $arg_string
+python experiments/train_img.py $arg_string
