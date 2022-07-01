@@ -11,4 +11,4 @@ module load cuda/11.1.1
 cd /home/gxc321/
 source BaconEnv/bin/activate
 cd /home/gxc321/scratch/bacon/experiments/
-python train_img.py --config ./config/img/bacon_mexico_city_multiscale.ini
+source train_img.sh mexico_city bacon_default_multi rgb

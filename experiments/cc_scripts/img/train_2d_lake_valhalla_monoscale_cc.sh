@@ -11,4 +11,4 @@ module load cuda/11.1.1
 cd /home/gxc321/
 source BaconEnv/bin/activate
 cd /home/gxc321/scratch/bacon/experiments/
-python train_img.py --config ./config/img/bacon_lake_valhalla_monoscale.ini
+source train_img.sh lake_valhalla bacon_default_mono rgb
