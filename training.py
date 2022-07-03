@@ -496,10 +496,10 @@ def train_wchunks(models, train_dataloader, num_steps, lr, steps_til_summary, st
 
     train_generator = iter(train_dataloader)
 
-    with tqdm(total=num_steps) as pbar:
+    with tqdm(total=num_steps + 1) as pbar:
         pbar.update(start_step)
         train_losses = []
-        for step in range(start_step, num_steps):
+        for step in range(start_step, num_steps + 1):
             if not step % steps_til_checkpoint and step:
                 for key, model in models.items():
                     torch.save(model.state_dict(),

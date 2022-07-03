@@ -70,14 +70,24 @@ class Options:
 
 
 def load_dataset(opt, res, scale):
-    dataset = dataio.NerfBlenderDataset(opt.dataset_path,
-                                        splits=['test'],
-                                        mode='test',
-                                        resize_to=(int(res/2**(3-scale)), int(res/2**(3-scale))),
-                                        multiscale=opt.multiscale,
-                                        override_scale=scale,
-                                        testskip=1)
-
+    dataset = None
+    if opt.multiscale:
+        dataset = dataio.NerfBlenderDataset(opt.dataset_path,
+                                            splits=['test'],
+                                            mode='test',
+                                            resize_to=(int(res/2**(3-scale)), int(res/2**(3-scale))),
+                                            multiscale=opt.multiscale,
+                                            override_scale=scale,
+                                            testskip=1)
+    else:
+        dataset = dataio.NerfBlenderDataset(opt.dataset_path,
+                                            splits=['test'],
+                                            mode='test',
+                                            resize_to=None,
+                                            multiscale=opt.multiscale,
+                                            override_scale=None,
+                                            testskip=1)
+    
     coords_dataset = dataio.Implicit6DMultiviewDataWrapper(dataset,
                                                            (int(res/2**(3-scale)), int(res/2**(3-scale))),
                                                            dataset.get_camera_params(),
@@ -110,6 +120,18 @@ def load_model(opt, checkpoint):
                                             input_scales=input_scales,
                                             output_layers=output_layers,
                                             reuse_filters=opt.reuse_filters)
+        model.cuda()
+    else:
+        input_scales = [1/24, 1/24, 1/24, 1/16, 1/16, 1/8, 1/8, 1/4, 1/4]
+        input_scales = input_scales[:opt.hidden_layers+1]
+
+        model = modules.BACON(3, opt.hidden_features, 4,
+                              hidden_layers=opt.hidden_layers,
+                              bias=True,
+                              frequency=sample_frequency,
+                              quantization_interval=np.pi/4,
+                              reuse_filters=opt.reuse_filters,
+                              input_scales=input_scales)
         model.cuda()
 
     print('Loading checkpoints')
@@ -209,7 +231,7 @@ def render_image(opt, models, dataset, chunk_size,
     use_chunks = True
 
     # render the whole thing in chunks
-    if scale > 3:
+    if scale >= 3:
         pred_view = render_all_in_chunks(in_dict, models['combined'], scale, chunk_size)
         return pred_view, 0.0, 0.0, 0.0
 
@@ -279,6 +301,7 @@ def render_image(opt, models, dataset, chunk_size,
         torch.cuda.synchronize()
         elapsed = start.elapsed_time(end)
 
+        # print(f"pred_pixels has shape {pred_pixels.shape}")
         pred_view = pred_pixels.view(view_shape).detach().cpu()
         pred_view = torch.clamp(pred_view, 0, 1).numpy()
 
@@ -288,15 +311,11 @@ def render_image(opt, models, dataset, chunk_size,
     return pred_view, psnr, ssim, elapsed
 
 
-def eval_nerf_bacon(scene, config, checkpoint, outdir, res, scale, chunk_size=10000, return_all=False, val_idx=None):
+def eval_nerf_bacon(opt, checkpoint, outdir, res, scale, chunk_size=10000, return_all=False, val_idx=None):
 
-    os.makedirs(f'./outputs/nerf/{outdir}', exist_ok=True)
+    os.makedirs(outdir, exist_ok=True)
 
-    p = configargparse.DefaultConfigFileParser()
-    with open(config) as f:
-        opt = p.parse(f)
-
-    opt = Options(**opt)
+    #opt = Options(**opt)
     dataset = load_dataset(opt, res, scale)
     models = load_model(opt, checkpoint)
 
@@ -319,14 +338,15 @@ def eval_nerf_bacon(scene, config, checkpoint, outdir, res, scale, chunk_size=10
                                                    in_dict, meta_dict, gt_dict,
                                                    scale, return_all=return_all)
 
-        tqdm.write(f'Scale: {scale} | PSNR: {psnr:.02f} dB, SSIM: {ssim:.02f}, Elapsed: {elapsed:.02f} ms')
+        tqdm.write(
+            f'Eval {idx}/{len(dataset)} | Scale: {scale} | PSNR: {psnr:.02f} dB, SSIM: {ssim:.02f}, Elapsed: {elapsed:.02f} ms')
 
         if return_all:
             for s in range(4):
-                skimage.io.imsave(f'./outputs/nerf/{outdir}/r_{idx}_d{3-s}.png', (images[s]*255).astype(np.uint8))
+                skimage.io.imsave(f'{outdir}/r_{idx}_d{3-s}.png', (images[s]*255).astype(np.uint8))
         else:
-            np.save(f'./outputs/nerf/{outdir}/r_{idx}_d{3-scale}.npy', {'psnr': psnr, 'ssim': ssim})
-            skimage.io.imsave(f'./outputs/nerf/{outdir}/r_{idx}_d{3-scale}.png', (images*255).astype(np.uint8))
+            np.save(f'{outdir}/r_{idx}_d{3-scale}.npy', {'psnr': psnr, 'ssim': ssim})
+            skimage.io.imsave(f'{outdir}/r_{idx}_d{3-scale}.png', (images*255).astype(np.uint8))
 
             psnrs.append(psnr)
             ssims.append(ssim)
@@ -335,7 +355,7 @@ def eval_nerf_bacon(scene, config, checkpoint, outdir, res, scale, chunk_size=10
             break
 
     if not return_all and val_idx is not None:
-        np.save(f'./outputs/nerf/{outdir}/metrics_d{3-scale}.npy', {'psnr': psnrs, 'ssim': ssims,
+        np.save(f'{outdir}/metrics_d{3-scale}.npy', {'psnr': psnrs, 'ssim': ssims,
                                                                     'avg_psnr': np.mean(psnrs),
                                                                     'avg_ssim': np.mean(ssims)})
 
@@ -348,18 +368,74 @@ if __name__ == '__main__':
     # these can be downloaded here
     # https://drive.google.com/drive/folders/1lrDkQanWtTznf48FCaW5lX9ToRdNDF1a
 
+    # process arguments (copied from training script)
+    p = configargparse.ArgumentParser()
+    p.add('-c', '--config', required=False, is_config_file=True, help='Path to config file.')
+    p.add_argument('--experiment_name', type=str, default=None,
+                help='path to directory where checkpoints & tensorboard events will be saved.')
+    p.add_argument('--checkpoint_path', default=None, help='Checkpoint to trained model.')
+    p.add_argument('--logging_root', type=str, default='../logs', help='root for logging')
+    p.add_argument('--dataset_path', type=str, default='../data/nerf_synthetic/lego/',
+                help='path to directory where dataset is stored')
+    p.add_argument('--resume', nargs=2, type=str, default=None,
+                help='resume training, specify path to directory where model is stored.')
+    p.add_argument('--num_steps', type=int, default=1000000,
+                help='Number of iterations to train for.')
+    p.add_argument('--steps_til_ckpt', type=int, default=50000,
+                help='Iterations until checkpoint is saved.')
+    p.add_argument('--steps_til_summary', type=int, default=2000,
+                help='Iterations until tensorboard summary is saved.')
+
+    # GPU & other computing properties
+    p.add_argument('--gpu', type=int, default=0,
+                help='GPU ID to use')
+    p.add_argument('--chunk_size_train', type=int, default=1024,
+                help='max chunk size to process data during training')
+    p.add_argument('--chunk_size_eval', type=int, default=512,
+                help='max chunk size to process data during eval')
+    p.add_argument('--num_workers', type=int, default=0, help='number of dataloader workers.')
+
+    # Learning properties
+    p.add_argument('--lr', type=float, default=1e-4, help='learning rate. default=5e-5')
+    p.add_argument('--batch_size', type=int, default=1)
+
+    # Network architecture properties
+    p.add_argument('--hidden_features', type=int, default=128)
+    p.add_argument('--hidden_layers', type=int, default=4)
+
+    p.add_argument('--multiscale', action='store_true', help='use multiscale architecture')
+    p.add_argument('--supervise_hr', action='store_true', help='supervise only with high resolution signal')
+    p.add_argument('--use_resized', action='store_true', help='use explicit multiscale supervision')
+    p.add_argument('--reuse_filters', action='store_true', help='reuse fourier filters for faster training/inference')
+
+    # NeRF Properties
+    p.add_argument('--img_size', type=int, default=64,
+                help='image resolution to train on (assumed symmetric)')
+    p.add_argument('--samples_per_ray', type=int, default=128,
+                help='samples to evaluate along each ray')
+    p.add_argument('--samples_per_view', type=int, default=1024,
+                help='samples to evaluate along each view')
+
+    # Rendering Properties
+    p.add_argument('--resolution', type=int, default=512,
+                help='resolution to render test images')
+
+    opt = p.parse_args()
+
     # render the model trained with explicit supervision at each scale
-    config = './config/nerf/bacon.ini'
-    checkpoint = '../trained_models/lego.pth'
-    outdir = 'lego'
-    res = 512
-    for scale in range(4):
-        eval_nerf_bacon('lego', config, checkpoint, outdir, res, scale)
+    checkpoint = f"logs/{opt.experiment_name}/checkpoints/model_combined_final.pth"
+    outdir = f"logs/{opt.experiment_name}/eval/"
+    res = opt.resolution
+    if opt.multiscale:
+        for scale in range(4):
+            eval_nerf_bacon(opt, checkpoint, outdir, res, scale, chunk_size=1024)
+    else:
+        eval_nerf_bacon(opt, checkpoint, outdir, res, 3, chunk_size=1024)
 
     # render the semisupervised model
-    config = './config/nerf/bacon_semisupervise.ini'
-    checkpoint = '../trained_models/lego_semisupervise.pth'
-    outdir = 'lego_semisupervise'
-    res = 512
-    for scale in range(4):
-        eval_nerf_bacon('lego_semisupervise', config, checkpoint, outdir, res, scale)
+    # config = './config/nerf/bacon_semisupervise.ini'
+    # checkpoint = '../trained_models/lego_semisupervise.pth'
+    # outdir = 'lego_semisupervise'
+    # res = 512
+    # for scale in range(4):
+    #     eval_nerf_bacon('lego_semisupervise', config, checkpoint, outdir, res, scale)
