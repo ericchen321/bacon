@@ -233,7 +233,14 @@ def render_image(opt, models, dataset, chunk_size,
     # render the whole thing in chunks
     if scale >= 3:
         pred_view = render_all_in_chunks(in_dict, models['combined'], scale, chunk_size)
-        return pred_view, 0.0, 0.0, 0.0
+        # Eric: here we compute PSNR/SSIM for scale >= 3
+        if isinstance(gt_dict['pixel_samples'], list):
+            gt_view = gt_dict['pixel_samples'][scale].squeeze(0).numpy()
+        else:
+            gt_view = gt_dict['pixel_samples'].detach().squeeze(0).numpy()
+        psnr = peak_signal_noise_ratio(gt_view, pred_view)
+        ssim = ssim_fn(gt_view, pred_view)
+        return pred_view, psnr, ssim, 0.0
 
     in_dict = training.dict2cuda(in_dict)
 
