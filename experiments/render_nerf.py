@@ -359,7 +359,8 @@ def eval_nerf_bacon(opt, checkpoint, outdir, res, scale, chunk_size=10000, retur
                                                                     'avg_psnr': np.mean(psnrs),
                                                                     'avg_ssim': np.mean(ssims)})
 
-        print(f'Avg. PSNR: {np.mean(psnrs):.02f}, Avg. SSIM: {np.mean(ssims):.02f}')
+    # Eric: always report average PSNR/SSIM    
+    print(f'Avg. PSNR: {np.mean(psnrs):.02f}, Avg. SSIM: {np.mean(ssims):.02f}')
 
 
 if __name__ == '__main__':
@@ -423,8 +424,8 @@ if __name__ == '__main__':
     opt = p.parse_args()
 
     # render the model trained with explicit supervision at each scale
-    checkpoint = f"logs/{opt.experiment_name}/checkpoints/model_combined_final.pth"
-    outdir = f"logs/{opt.experiment_name}/eval/"
+    checkpoint = f"{opt.logging_root}/{opt.experiment_name}/checkpoints/model_combined_final.pth"
+    outdir = f"{opt.logging_root}/{opt.experiment_name}/eval/"
     res = opt.resolution
     if opt.multiscale:
         for scale in range(4):

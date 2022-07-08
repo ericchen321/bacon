@@ -24,5 +24,6 @@ arg_string="--config ${BASE_CONFIG_PATH} \
 "
 
 # execute
+LOGFILE_PATH="logs/${BASE_CONFIG_NAME}_${SCENE_NAME}/eval.log"
 set -x
-python experiments/render_nerf.py $arg_string
+python experiments/render_nerf.py $arg_string 2>&1 | tee $LOGFILE_PATH
