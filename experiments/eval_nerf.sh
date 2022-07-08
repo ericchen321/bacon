@@ -8,9 +8,9 @@ RESOLUTION="$4"
 # define paths
 BASE_CONFIG_PATH="experiments/config/nerf/${BASE_CONFIG_NAME}.ini"
 if [[ "$DATASET_NAME" == "blender" ]]; then
-    DATA_DIR="data/nerf_synthetic/"
+    DATA_DIR="data/nerf_synthetic_${RESOLUTION}/"
 elif [[ "$DATASET_NAME" == "llff" ]]; then
-    DATA_DIR="data/nerf_llff_data/"
+    DATA_DIR="data/nerf_llff_data_${RESOLUTION}/"
 else
     echo "Error! Dataset name not recognized"
     exit 1

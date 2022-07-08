@@ -27,46 +27,46 @@ ssim_fn = partial(structural_similarity, data_range=1,
                   channel_axis=-1)
 
 
-@dataclass
-class Options:
-    config: str
-    experiment_name: str
-    logging_root: str
-    dataset_path: str
-    num_epochs: int
-    epochs_til_ckpt: int
-    steps_til_summary: int
-    gpu: int
-    img_size: int
-    chunk_size_train: int
-    chunk_size_eval: int
-    num_workers: int
-    lr: float
-    batch_size: int
-    hidden_features: int
-    hidden_layers: int
-    model: str
-    activation: str
-    multiscale: bool
-    single_network: bool
-    use_resized: bool
-    reuse_filters: bool
-    samples_per_ray: int
-    samples_per_view: int
-    forward_mode: str
-    supervise_hr: bool
-    rank: int
+# @dataclass
+# class Options:
+#     config: str
+#     experiment_name: str
+#     logging_root: str
+#     dataset_path: str
+#     num_epochs: int
+#     epochs_til_ckpt: int
+#     steps_til_summary: int
+#     gpu: int
+#     img_size: int
+#     chunk_size_train: int
+#     chunk_size_eval: int
+#     num_workers: int
+#     lr: float
+#     batch_size: int
+#     hidden_features: int
+#     hidden_layers: int
+#     model: str
+#     activation: str
+#     multiscale: bool
+#     single_network: bool
+#     use_resized: bool
+#     reuse_filters: bool
+#     samples_per_ray: int
+#     samples_per_view: int
+#     forward_mode: str
+#     supervise_hr: bool
+#     rank: int
 
-    def __init__(self, **kwargs):
-        names = set([f.name for f in dataclasses.fields(self)])
-        for k, v in kwargs.items():
-            if k in names:
-                setattr(self, k, self.__annotations__[k](v))
+#     def __init__(self, **kwargs):
+#         names = set([f.name for f in dataclasses.fields(self)])
+#         for k, v in kwargs.items():
+#             if k in names:
+#                 setattr(self, k, self.__annotations__[k](v))
 
-        if 'supervise_hr' not in kwargs.keys():
-            self.supervise_hr = False
+#         if 'supervise_hr' not in kwargs.keys():
+#             self.supervise_hr = False
 
-        self.img_size = 512
+#         self.img_size = 512
 
 
 def load_dataset(opt, res, scale):

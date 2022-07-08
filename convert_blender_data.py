@@ -16,6 +16,8 @@ FLAGS = flags.FLAGS
 
 flags.DEFINE_string('blenderdir', None, 'Base directory for all Blender data.')
 flags.DEFINE_integer('n_down', 4, 'How many levels of downscaling to use.')
+# Eric: make unscaled resolution configurable
+flags.DEFINE_integer('res', 512, 'Size at top level')
 
 
 def load_renderings(data_dir, split):
@@ -47,7 +49,7 @@ def down2(img):
     return np.mean(np.reshape(img, [sh[0] // 2, 2, sh[1] // 2, 2, -1]), (1, 3))
 
 
-def convert_to_nerfdata(basedir, n_down):
+def convert_to_nerfdata(basedir, n_down, res):
     """Convert Blender data to multiscale."""
     splits = ['train', 'val', 'test']
     # Foreach split in the dataset
@@ -65,7 +67,7 @@ def convert_to_nerfdata(basedir, n_down):
                 fname = '{}/r_{:d}_d{}.png'.format(imgdir, i, j)
                 fname = os.path.join(basedir, fname)
                 with open(fname, 'wb') as imgout:
-                    img = skimage.transform.resize(img, 2*(512//2**j,))
+                    img = skimage.transform.resize(img, 2*(res//2**j,))
                     img8 = Image.fromarray(np.uint8(img * 255))
                     img8.save(imgout)
                 # img = down2(img)
@@ -75,13 +77,14 @@ def main(unused_argv):
 
     blenderdir = FLAGS.blenderdir
     n_down = FLAGS.n_down
+    res = FLAGS.res
 
     dirs = [os.path.join(blenderdir, f) for f in os.listdir(blenderdir)]
     dirs = [d for d in dirs if os.path.isdir(d)]
     print(dirs)
     for basedir in dirs:
         print()
-        convert_to_nerfdata(basedir, n_down)
+        convert_to_nerfdata(basedir, n_down, res)
 
 
 if __name__ == '__main__':

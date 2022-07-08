@@ -275,7 +275,9 @@ class NerfBlenderDataset(torch.utils.data.Dataset):
     def __init__(self, basedir, mode='train',
                  splits=['train', 'val', 'test'],
                  select_idx=None,
-                 testskip=1, resize_to=None, final_render=False,
+                 testskip=1,
+                 base_size=512, resize_to=None,
+                 final_render=False,
                  d_rot=0, bounds=((-2, 2), (-2, 2), (0, 2)),
                  multiscale=False,
                  black_background=False,
@@ -302,7 +304,7 @@ class NerfBlenderDataset(torch.utils.data.Dataset):
                                             interpolation=Image.BILINEAR))
 
         def multiscale_resize(x):
-            scale = 512 // x.size[0]
+            scale = base_size // x.size[0]
             # Eric: I have to put an if/else clause here
             # since their code didn't work
             if len(resize_to) == 1:

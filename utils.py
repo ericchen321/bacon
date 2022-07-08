@@ -243,7 +243,8 @@ def write_psnr(pred_img, gt_img, writer, iter, prefix):
 def write_multiscale_radiance_summary(models, train_dataloader, val_dataloader, loss_fn, optims,
                                       meta, gt, writer, total_steps,
                                       chunk_size_eval, num_views_to_disp_at_training,
-                                      hierarchical_sampling=False):
+                                      hierarchical_sampling=False,
+                                      base_size=512):
     print('Running validation and logging...')
 
     chunk_size = chunk_size_eval
@@ -321,8 +322,8 @@ def write_multiscale_radiance_summary(models, train_dataloader, val_dataloader, 
     if isinstance(gt_view, list):
         gt_view = make_grid(torch.cat(gt_view, dim=0), scale_each=False, normalize=False)
 
-    if pred_view.shape[1] < 512:
-        scale = 512 // pred_view.shape[1]
+    if pred_view.shape[1] < base_size:
+        scale = base_size // pred_view.shape[1]
         pred_view = torch.nn.functional.interpolate(pred_view.unsqueeze(0), scale_factor=scale, mode='nearest')
         pred_view = pred_view.squeeze(0)
         gt_view = torch.nn.functional.interpolate(gt_view.unsqueeze(0), scale_factor=scale, mode='nearest')
@@ -427,8 +428,8 @@ def write_multiscale_radiance_summary(models, train_dataloader, val_dataloader, 
 
     pred_disp_view = make_grid(torch.cat(pred_disps, dim=0), scale_each=False, normalize=False)
 
-    if gt_view.shape[1] < 512:
-        scale = 512 // gt_view.shape[1]
+    if gt_view.shape[1] < base_size:
+        scale = base_size // gt_view.shape[1]
         pred_view = torch.nn.functional.interpolate(pred_view.unsqueeze(0), scale_factor=scale, mode='nearest')
         pred_disp_view = torch.nn.functional.interpolate(pred_disp_view.unsqueeze(0), scale_factor=scale, mode='nearest')
         pred_view = pred_view.squeeze(0)
@@ -448,7 +449,8 @@ def write_multiscale_radiance_summary(models, train_dataloader, val_dataloader, 
 def write_radiance_summary(models, train_dataloader, val_dataloader, loss_fn, optims,
                            meta, gt, writer, total_steps,
                            chunk_size_eval, num_views_to_disp_at_training,
-                           hierarchical_sampling=False):
+                           hierarchical_sampling=False,
+                           base_size=512):
     print('Running validation and logging...')
 
     chunk_size = chunk_size_eval
@@ -553,8 +555,8 @@ def write_radiance_summary(models, train_dataloader, val_dataloader, loss_fn, op
         writer.add_scalar("val: PSNR", val_psnr, global_step=total_steps)
 
         # nearest neighbor upsample image for easier viewing
-        if gt_view.shape[1] < 512:
-            scale = 512 // gt_view.shape[1]
+        if gt_view.shape[1] < base_size:
+            scale = base_size // gt_view.shape[1]
             gt_view = torch.nn.functional.interpolate(gt_view.unsqueeze(0), scale_factor=scale, mode='nearest')
             pred_view = torch.nn.functional.interpolate(pred_view.unsqueeze(0), scale_factor=scale, mode='nearest')
             pred_disp_view = torch.nn.functional.interpolate(pred_disp_view.unsqueeze(0), scale_factor=scale, mode='nearest')

@@ -89,10 +89,8 @@ def train(validation=True):
     dataset = dataio.NerfBlenderDataset(opt.dataset_path,
                                         splits=['train'],
                                         mode='train',
-                                        # resize_to=2*(opt.img_size,),
-                                        # Eric: should not be scaling by 2 for no reason
-                                        # I guess
-                                        resize_to=(opt.img_size,),
+                                        base_size=opt.img_size,
+                                        resize_to=2*(opt.img_size,),
                                         multiscale=opt.multiscale)
 
     coords_dataset = dataio.Implicit6DMultiviewDataWrapper(dataset,
@@ -108,10 +106,8 @@ def train(validation=True):
         val_dataset = dataio.NerfBlenderDataset(opt.dataset_path,
                                                 splits=['val'],
                                                 mode='val',
-                                                # resize_to=2*(opt.img_size,),
-                                                # Eric: should not be scaling by 2 for no reason
-                                                # I guess
-                                                resize_to=(opt.img_size,),
+                                                base_size=opt.img_size,
+                                                resize_to=2*(opt.img_size,),
                                                 multiscale=opt.multiscale)
 
         val_coords_dataset = dataio.Implicit6DMultiviewDataWrapper(val_dataset,
@@ -206,14 +202,16 @@ def train(validation=True):
         summary_fn = partial(utils.write_multiscale_radiance_summary,
                              chunk_size_eval=opt.chunk_size_eval,
                              num_views_to_disp_at_training=1,
-                             hierarchical_sampling=True)
+                             hierarchical_sampling=True,
+                             base_size=opt.img_size)
     else:
         loss_fn = partial(loss_functions.radiance_sigma_rgb_loss)
 
         summary_fn = partial(utils.write_radiance_summary,
                              chunk_size_eval=opt.chunk_size_eval,
                              num_views_to_disp_at_training=1,
-                             hierarchical_sampling=True)
+                             hierarchical_sampling=True,
+                             base_size=opt.img_size)
 
     chunk_lists_from_batch_fn = dataio.chunk_lists_from_batch_reduce_to_raysamples_fn
 
