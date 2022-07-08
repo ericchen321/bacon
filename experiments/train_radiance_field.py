@@ -89,7 +89,10 @@ def train(validation=True):
     dataset = dataio.NerfBlenderDataset(opt.dataset_path,
                                         splits=['train'],
                                         mode='train',
-                                        resize_to=2*(opt.img_size,),
+                                        # resize_to=2*(opt.img_size,),
+                                        # Eric: should not be scaling by 2 for no reason
+                                        # I guess
+                                        resize_to=(opt.img_size,),
                                         multiscale=opt.multiscale)
 
     coords_dataset = dataio.Implicit6DMultiviewDataWrapper(dataset,
@@ -105,7 +108,10 @@ def train(validation=True):
         val_dataset = dataio.NerfBlenderDataset(opt.dataset_path,
                                                 splits=['val'],
                                                 mode='val',
-                                                resize_to=2*(opt.img_size,),
+                                                # resize_to=2*(opt.img_size,),
+                                                # Eric: should not be scaling by 2 for no reason
+                                                # I guess
+                                                resize_to=(opt.img_size,),
                                                 multiscale=opt.multiscale)
 
         val_coords_dataset = dataio.Implicit6DMultiviewDataWrapper(val_dataset,

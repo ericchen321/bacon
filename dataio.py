@@ -303,8 +303,15 @@ class NerfBlenderDataset(torch.utils.data.Dataset):
 
         def multiscale_resize(x):
             scale = 512 // x.size[0]
-            return x.resize([r//scale for r in resize_to],
+            # Eric: I have to put an if/else clause here
+            # since their code didn't work
+            if len(resize_to) == 1:
+                dim = resize_to[0] // scale
+                return x.resize([dim, dim],
                             resample=Image.BILINEAR)
+            else:
+                return x.resize([r//scale for r in resize_to],
+                                resample=Image.BILINEAR)
 
         if multiscale and override_scale is None:
             # this will scale the image down appropriately
