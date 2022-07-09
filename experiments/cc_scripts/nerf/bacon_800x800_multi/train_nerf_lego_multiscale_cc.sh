@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --time=12:00:00
+#SBATCH --time=120:00:00
 #SBATCH --account=def-rhodin
 #SBATCH --job-name=tr_lego_800x800_multi_bacon
 #SBATCH --gres=gpu:v100l:1
