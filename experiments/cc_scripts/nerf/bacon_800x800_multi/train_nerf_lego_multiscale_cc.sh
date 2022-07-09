@@ -11,4 +11,4 @@ module load cuda/11.1.1
 cd /home/gxc321/
 source BaconEnv/bin/activate
 cd /home/gxc321/scratch/bacon/
-source experiments/train_nerf.sh lego blender bacon_default_multi 800
+source experiments/train_nerf.sh lego blender bacon_800x800_multi 800
