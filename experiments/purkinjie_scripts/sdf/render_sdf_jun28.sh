@@ -6,7 +6,7 @@ resolution="$3"
 
 declare -a shape_names=(
     "at-ot"
-    "cathedral"
+    # "cathedral"
     "gear_shift"
     "lunar_lander"
     "ninjago_city"
