@@ -3,6 +3,7 @@
 exp_category="$1"
 logging_subdir="$2"
 resolution="$3"
+batch_size="16384"
 
 declare -a shape_names=(
     "at-ot"
@@ -14,5 +15,6 @@ declare -a shape_names=(
     )
 
 for shape_name in ${shape_names[@]}; do
-    source experiments/eval_sdf.sh $shape_name $logging_subdir $exp_category $resolution
+    source experiments/eval_sdf.sh \
+    $shape_name $logging_subdir $exp_category $resolution $batch_size
 done

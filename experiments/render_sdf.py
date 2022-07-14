@@ -19,7 +19,8 @@ def export_model(
     subdiv_hashes, lowest_res, coords_list, sdf_out_list,
     N=512, model_type='bacon', hidden_layers=8,
     hidden_size=256, output_layers=[1, 2, 4, 8],
-    return_sdf=False, adaptive=True):
+    bsize=128**2,
+    return_sdf=False, adaptive=False):
 
     # the network has 4 output levels of detail
     num_outputs = len(output_layers)
@@ -43,7 +44,8 @@ def export_model(
     if not adaptive:
         # extracts separate meshes for each scale
         generate_mesh(
-            model, N, return_sdf, num_outputs, model_name, logging_root)
+            model, N, return_sdf, num_outputs, bsize,
+            model_name, logging_root)
 
     else:
         # extracts single-scale output
@@ -53,8 +55,8 @@ def export_model(
 
 
 def generate_mesh(
-    model, N, return_sdf=False, num_outputs=4, model_name='model', logging_root="logs"):
-
+    model, N, return_sdf=False, num_outputs=4, bsize=128**2,
+    model_name='model', logging_root="logs"):
     # write output
     x = torch.linspace(-0.5, 0.5, N)
     if return_sdf:
@@ -65,7 +67,6 @@ def generate_mesh(
     sdf_values = [np.zeros((N**3, 1)) for i in range(num_outputs)]
 
     # render in a batched fashion to save memory
-    bsize = int(128**2)
     for i in tqdm(range(int(N**3 / bsize))):
         coords = render_coords[i*bsize:(i+1)*bsize, :]
         out = model({'coords': coords})['model_out']
@@ -85,8 +86,8 @@ def generate_mesh(
         mesh = trimesh.Trimesh(vertices=vertices, faces=triangles)
         mesh.vertices = (mesh.vertices / N - 0.5) + 0.5/N
 
-        os.makedirs(f'{logging_root}/{model_name}/meshes/',  exist_ok=True)
-        mesh.export(f"{logging_root}/{model_name}/meshes/{model_name}_{idx+1}.obj")
+        os.makedirs(f'{logging_root}/{model_name}/meshes/{N}/',  exist_ok=True)
+        mesh.export(f"{logging_root}/{model_name}/meshes/{N}/{model_name}_{idx+1}.obj")
 
 
 def prepare_multi_scale(res, num_scales):
@@ -188,13 +189,15 @@ def export_meshes(
     ckpt,
     logging_root,
     subdiv_hashes, lowest_res, coords_list, sdf_out_list,
-    res=512, adaptive=True):
+    res=512, bsize=128**2, adaptive=False):
     # Eric: supply exp name, ckpt path and res from arguments
-    print('Exporting BACON')
+    print(f'Exporting BACON, res: {res}, adaptive: {adaptive}, batch size: {bsize}')
     export_model(
         ckpt, name, logging_root,
         subdiv_hashes, lowest_res, coords_list, sdf_out_list,
-        N=res, model_type='bacon', output_layers=output_layers, adaptive=adaptive)
+        N=res, model_type='bacon', output_layers=output_layers,
+        bsize=bsize,
+        adaptive=adaptive)
 
 
 def init_multiscale_mc(N):
@@ -208,8 +211,6 @@ def init_multiscale_mc(N):
 
 
 if __name__ == '__main__':
-    #global N, output_layers, subdiv_hashes, lowest_res, coords_list, sdf_out_list, num_outputs
-
     # Eric: use config file rather than hard-coded values
     p = configargparse.ArgumentParser()
 
@@ -222,6 +223,7 @@ if __name__ == '__main__':
 
     # config rendering options
     p.add_argument('--res', type=int, default=512, help='rendering resolution')
+    p.add_argument('--batch_size', type=int, default=128**2, help='rendering batch size')
     p.add_argument('--adaptive', action='store_true', default=False, help='use adaptive rendering')
 
     opt = p.parse_args()
@@ -242,4 +244,5 @@ if __name__ == '__main__':
         opt.logging_root,
         subdiv_hashes, lowest_res, coords_list, sdf_out_list,
         res=opt.res,
+        bsize=opt.batch_size,
         adaptive=opt.adaptive)
