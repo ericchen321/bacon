@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --array=0-7
-#SBATCH --time=04:00:00
+#SBATCH --time=06:00:00
 #SBATCH --account=def-rhodin
 #SBATCH --job-name=te_nerf_bacon_default_multi_bacon
 #SBATCH --gres=gpu:v100l:1
