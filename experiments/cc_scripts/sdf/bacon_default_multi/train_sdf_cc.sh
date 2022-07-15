@@ -13,15 +13,4 @@ cd /home/gxc321/
 source BaconEnv/bin/activate
 cd /home/gxc321/scratch/bacon/
 
-declare -a shape_names=(
-    "at-ot"
-    "cathedral"
-    "gear_shift"
-    "lunar_lander"
-    "ninjago_city"
-    "oak_tree"
-    "thai_statue"
-    )
-for shape_name in ${shape_names[@]}; do
-    source experiments/train_sdf.sh $SLURM_ARRAY_TASK_ID $shape_name bacon_default_multi
-done
+source experiments/cc_scripts/sdf/bacon_default_multi/train_sdf_per_task_cc.sh $SLURM_ARRAY_TASK_ID
